@@ -47,8 +47,12 @@ export default function SearchPage() {
     setHasSearched(false);
 
     try {
+      const { compressImage } = await import('@/lib/utils');
+      // Compress the image to max 1MB to avoid Netlify payload limits
+      const compressedFile = await compressImage(selectedFile, 1, 1000);
+      
       const formData = new FormData();
-      formData.append('image', selectedFile);
+      formData.append('image', compressedFile);
       if (selectedEvent !== 'all') {
         formData.append('eventId', selectedEvent);
       }
