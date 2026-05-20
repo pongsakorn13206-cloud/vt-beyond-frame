@@ -26,7 +26,7 @@ export default function CustomSelect({ value, onChange, options, label, classNam
     };
   }, [isOpen]);
 
-  const selectedOption = options.find(opt => opt.value === value) || options[0];
+  const selectedOption = options.find(opt => String(opt.value) === String(value)) || options[0];
 
   const handleSelect = (val) => {
     onChange(val);
@@ -72,7 +72,7 @@ export default function CustomSelect({ value, onChange, options, label, classNam
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {options.map((option) => {
-                const isSelected = option.value === value;
+                const isSelected = String(option.value) === String(value);
                 return (
                   <button
                     key={option.value}

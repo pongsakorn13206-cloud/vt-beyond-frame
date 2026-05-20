@@ -19,9 +19,48 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: 'รหัสกิจกรรมไม่ถูกต้อง' }, { status: 400 });
     }
 
-    // Since we have ON DELETE CASCADE in the database, 
-    // deleting the event will automatically delete the photos and face_embeddings records.
-    // Ideally, we would also delete the files from Supabase Storage here.
+    // First, get all photos for this event to delete their storage files
+    const { data: photos } = await supabaseAdmin
+      .from('photos')
+      .select('storage_path')
+      .eq('event_id', id);
+
+    // Delete all photo files from Supabase Storage
+    if (photos && photos.length > 0) {
+      const storagePaths = photos
+        .map(p => p.storage_path)
+        .filter(Boolean);
+
+      if (storagePaths.length > 0) {
+        const { error: storageError } = await supabaseAdmin.storage
+          .from('event-photos')
+          .remove(storagePaths);
+
+        if (storageError) {
+          console.error('Storage delete error:', storageError);
+          // Continue anyway — we still want to delete the DB records
+        }
+      }
+    }
+
+    // Also delete the event cover folder if it exists
+    const { data: eventData } = await supabaseAdmin
+      .from('events')
+      .select('cover_image')
+      .eq('id', id)
+      .single();
+
+    if (eventData?.cover_image) {
+      // Extract storage path from the public URL
+      const coverPath = eventData.cover_image.split('/storage/v1/object/public/event-photos/')[1];
+      if (coverPath) {
+        await supabaseAdmin.storage
+          .from('event-photos')
+          .remove([decodeURIComponent(coverPath)]);
+      }
+    }
+
+    // Delete the event from DB (CASCADE will delete photos + face_embeddings records)
     const { error } = await supabaseAdmin
       .from('events')
       .delete()

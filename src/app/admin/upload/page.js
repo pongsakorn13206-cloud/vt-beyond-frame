@@ -2,11 +2,12 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { HiUpload, HiX, HiCheckCircle, HiArrowLeft } from 'react-icons/hi';
+import { HiUpload, HiX, HiCheckCircle, HiArrowLeft, HiExclamationCircle } from 'react-icons/hi';
 import Link from 'next/link';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import CustomSelect from '@/components/CustomSelect';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 
 function UploadContent() {
   const searchParams = useSearchParams();
@@ -20,6 +21,7 @@ function UploadContent() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, phase: '' });
   const [results, setResults] = useState({ uploaded: 0, scanned: 0, faces: 0 });
+  const [errors, setErrors] = useState([]);
   const [isDone, setIsDone] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -64,37 +66,79 @@ function UploadContent() {
   const handleUpload = async () => {
     if (!selectedEvent || files.length === 0) return;
     setUploading(true);
+    setErrors([]);
     setProgress({ current: 0, total: files.length, phase: t('upload.uploading') });
     let uploadedCount = 0, scannedCount = 0, facesCount = 0;
+    const uploadErrors = [];
 
     try {
-      // Upload in batches of 3 (smaller batches for stability)
-      const batchSize = 3;
-      for (let i = 0; i < files.length; i += batchSize) {
-        const batch = files.slice(i, i + batchSize);
-        const formData = new FormData();
-        formData.append('event_id', selectedEvent);
-        if (photographerName.trim()) {
-          formData.append('photographer_name', photographerName.trim());
-        }
-        batch.forEach(f => formData.append('photos', f));
-
-        const res = await fetch('/api/photos', { method: 'POST', body: formData });
-        const data = await res.json();
-        uploadedCount += data.photos?.length || 0;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const ext = file.name.split('.').pop();
+        const storagePath = `${selectedEvent}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${ext}`;
 
         setProgress({
-          current: Math.min(i + batchSize, files.length),
+          current: i,
           total: files.length,
-          phase: t('upload.uploading'),
+          phase: `${t('upload.uploading')} (${i + 1}/${files.length})`,
         });
 
-        // Scan faces using Python InsightFace API (server-side)
-        if (data.photos) {
-          for (const photo of data.photos) {
+        try {
+          // Step 1: Upload directly to Supabase Storage from browser (bypasses Netlify 6MB limit)
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('event-photos')
+            .upload(storagePath, file, {
+              contentType: file.type,
+              upsert: false,
+            });
+
+          if (uploadError) {
+            console.error(`Storage upload error for ${file.name}:`, uploadError);
+            uploadErrors.push(`${file.name}: ${uploadError.message}`);
+            continue;
+          }
+
+          // Step 2: Get public URL
+          const { data: urlData } = supabase.storage
+            .from('event-photos')
+            .getPublicUrl(storagePath);
+
+          const publicUrl = urlData.publicUrl;
+
+          // Step 3: Save metadata via lightweight API (only JSON, no file — tiny request)
+          const regRes = await fetch('/api/photos/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event_id: selectedEvent,
+              storage_path: storagePath,
+              original_url: publicUrl,
+              photographer_name: photographerName.trim(),
+            }),
+          });
+
+          const regData = await regRes.json();
+
+          if (!regRes.ok) {
+            console.error(`Register error for ${file.name}:`, regData.error);
+            uploadErrors.push(`${file.name}: ${regData.error}`);
+            continue;
+          }
+
+          uploadedCount++;
+
+          setProgress({
+            current: i + 1,
+            total: files.length,
+            phase: `${t('upload.uploading')} (${i + 1}/${files.length})`,
+          });
+
+          // Step 4: Scan faces (optional — won't block upload if it fails)
+          if (regData.photo) {
+            const photo = regData.photo;
             setProgress(p => ({
               ...p,
-              phase: `${t('upload.uploading')} — ${scannedCount + 1}/${uploadedCount}`,
+              phase: `สแกนใบหน้า ${scannedCount + 1}/${uploadedCount}`,
             }));
 
             try {
@@ -115,6 +159,10 @@ function UploadContent() {
               scannedCount++;
             }
           }
+        } catch (err) {
+          console.error(`Error processing ${file.name}:`, err);
+          uploadErrors.push(`${file.name}: ${err.message}`);
+          continue;
         }
       }
     } catch (error) {
@@ -122,6 +170,7 @@ function UploadContent() {
     }
 
     setResults({ uploaded: uploadedCount, scanned: scannedCount, faces: facesCount });
+    setErrors(uploadErrors);
     setIsDone(true);
     setUploading(false);
   };
@@ -130,16 +179,26 @@ function UploadContent() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-8 max-w-md w-full text-center">
-          <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4"><HiCheckCircle className="text-3xl text-green-400" /></div>
-          <h2 className="text-2xl font-bold text-white mb-2">{t('upload.success')}</h2>
+          <div className={`w-16 h-16 rounded-full ${results.uploaded > 0 ? 'bg-green-500/20' : 'bg-red-500/20'} flex items-center justify-center mx-auto mb-4`}>
+            {results.uploaded > 0 ? <HiCheckCircle className="text-3xl text-green-400" /> : <HiExclamationCircle className="text-3xl text-red-400" />}
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">{results.uploaded > 0 ? t('upload.success') : 'อัปโหลดไม่สำเร็จ'}</h2>
           <div className="space-y-2 text-sm text-slate-400 mb-2">
             <p>{t('upload.uploadedCount')}: <span className="text-white font-semibold">{results.uploaded}</span> {t('common.photos')}</p>
             <p>{t('upload.scannedCount')}: <span className="text-white font-semibold">{results.scanned}</span> {t('common.photos')}</p>
             <p>{t('upload.facesFound')}: <span className="text-white font-semibold">{results.faces}</span></p>
           </div>
+          {errors.length > 0 && (
+            <div className="mt-3 mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-left max-h-32 overflow-y-auto">
+              <p className="text-xs text-red-400 font-semibold mb-1">ข้อผิดพลาด ({errors.length}):</p>
+              {errors.map((err, i) => (
+                <p key={i} className="text-xs text-red-300/80 truncate">{err}</p>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-indigo-400 mb-6">ขับเคลื่อนโดย InsightFace ArcFace (512D)</p>
           <div className="flex gap-3">
-            <button onClick={() => { setFiles([]); setIsDone(false); setResults({ uploaded: 0, scanned: 0, faces: 0 }); }} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-white/10 rounded-xl text-sm font-medium text-white transition-colors">{t('upload.uploadMore')}</button>
+            <button onClick={() => { setFiles([]); setIsDone(false); setErrors([]); setResults({ uploaded: 0, scanned: 0, faces: 0 }); }} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-white/10 rounded-xl text-sm font-medium text-white transition-colors">{t('upload.uploadMore')}</button>
             <Link href="/admin/dashboard" className="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl text-sm font-medium text-white text-center">{t('upload.backDashboard')}</Link>
           </div>
         </motion.div>

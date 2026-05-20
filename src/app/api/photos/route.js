@@ -58,10 +58,14 @@ export async function POST(request) {
     for (const file of files) {
       const fileName = `${eventId}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${file.name.split('.').pop()}`;
 
+      // Convert web File to Buffer for Supabase Node.js client compatibility
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
       // Upload to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
         .from('event-photos')
-        .upload(fileName, file, {
+        .upload(fileName, buffer, {
           contentType: file.type,
           upsert: false,
         });
