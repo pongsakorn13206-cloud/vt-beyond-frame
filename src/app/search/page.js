@@ -6,6 +6,7 @@ import { BsStars } from 'react-icons/bs';
 import SearchResults from '@/components/SearchResults';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import FaceScanner from '@/components/FaceScanner';
+import CustomSelect from '@/components/CustomSelect';
 import { useLanguage } from '@/context/LanguageContext';
 
 export default function SearchPage() {
@@ -134,21 +135,15 @@ export default function SearchPage() {
                 
                 {/* Event Selector */}
                 <div className="max-w-xs mx-auto mb-6 text-left">
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    {t('search.filterEvent') || 'ระบุกิจกรรมที่ต้องการค้นหา (ทางเลือก)'}
-                  </label>
-                  <select
+                  <CustomSelect
                     value={selectedEvent}
-                    onChange={(e) => setSelectedEvent(e.target.value)}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                  >
-                    <option value="all">{t('search.allEvents') || 'ค้นหาทุกกิจกรรม'}</option>
-                    {events.map((event) => (
-                      <option key={event.id} value={event.id}>
-                        {event.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedEvent}
+                    options={[
+                      { value: 'all', label: t('search.allEvents') || 'ค้นหาทุกกิจกรรม' },
+                      ...events.map((event) => ({ value: event.id, label: event.name }))
+                    ]}
+                    label={t('search.filterEvent') || 'ระบุกิจกรรมที่ต้องการค้นหา (ทางเลือก)'}
+                  />
                 </div>
 
                 <div className="flex items-center justify-center gap-3">
