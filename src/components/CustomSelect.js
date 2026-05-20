@@ -65,9 +65,12 @@ export default function CustomSelect({ value, onChange, options, label, classNam
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="absolute z-50 w-full mt-2 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl max-h-60 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-800"
+            className="absolute z-50 w-full mt-2 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
           >
-            <div className="py-1.5 px-1.5 flex flex-col gap-1">
+            <div 
+              className="max-h-48 overflow-y-auto overflow-x-hidden py-1.5 px-1.5 flex flex-col gap-1 scrollbar-thin scrollbar-thumb-slate-800"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {options.map((option) => {
                 const isSelected = option.value === value;
                 return (
