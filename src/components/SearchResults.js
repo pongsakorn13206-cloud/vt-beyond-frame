@@ -5,6 +5,7 @@ import { HiDownload, HiPhotograph, HiSparkles, HiArchive, HiCheckCircle } from '
 import { BsStars } from 'react-icons/bs';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import Image from 'next/image';
 import { getConfidenceColor, downloadImage, formatDate } from '@/lib/utils';
 import MemoryStory from '@/components/MemoryStory';
 import { useLanguage } from '@/context/LanguageContext';
@@ -216,10 +217,12 @@ export default function SearchResults({ results = [], isLoading = false }) {
                   }
                 }}
               >
-                <img
+                <Image
                   src={photo.thumbnail_url || photo.original_url}
                   alt={`Match ${index + 1}`}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  fill
+                  sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  className="object-cover group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />
                 
