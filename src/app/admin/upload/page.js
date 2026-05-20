@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { HiUpload, HiX, HiCheckCircle, HiArrowLeft } from 'react-icons/hi';
 import Link from 'next/link';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import CustomSelect from '@/components/CustomSelect';
 import { useLanguage } from '@/context/LanguageContext';
 
 function UploadContent() {
@@ -158,11 +159,15 @@ function UploadContent() {
 
         {/* Event selector */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-300 mb-2">{t('upload.selectEvent')}</label>
-          <select value={selectedEvent} onChange={(e) => setSelectedEvent(e.target.value)} className="w-full px-4 py-3 bg-slate-800/50 border border-white/10 rounded-xl text-white focus:outline-none focus:border-indigo-500 transition-all">
-            <option value="">{t('upload.selectEventDefault')}</option>
-            {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
-          </select>
+          <CustomSelect
+            value={selectedEvent}
+            onChange={setSelectedEvent}
+            options={[
+              { value: '', label: t('upload.selectEventDefault') || 'เลือกกิจกรรม...' },
+              ...events.map(ev => ({ value: ev.id, label: ev.name }))
+            ]}
+            label={t('upload.selectEvent')}
+          />
         </div>
 
         {/* Photographer Input */}
