@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { HiDownload, HiPhotograph, HiSparkles, HiArchive, HiCheckCircle } from 'react-icons/hi';
+import { HiDownload, HiPhotograph, HiSparkles, HiArchive, HiCheckCircle, HiX } from 'react-icons/hi';
 import { BsStars } from 'react-icons/bs';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -15,6 +15,7 @@ export default function SearchResults({ results = [], isLoading = false }) {
   const [isZipping, setIsZipping] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const { t } = useLanguage();
 
   const downloadZip = async (photosToDownload) => {
@@ -215,7 +216,7 @@ export default function SearchResults({ results = [], isLoading = false }) {
                   if (isSelectMode) {
                     togglePhotoSelection(photo.photo_id);
                   } else {
-                    // Normal click action if any, e.g. open lightbox
+                    setLightboxPhoto(photo);
                   }
                 }}
               >
@@ -276,6 +277,39 @@ export default function SearchResults({ results = [], isLoading = false }) {
           photos={results} 
           onClose={() => setShowStoryModal(false)} 
         />
+      )}
+
+      {/* Lightbox Modal */}
+      {lightboxPhoto && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 sm:p-8 backdrop-blur-sm"
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <button 
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-10"
+            onClick={(e) => { e.stopPropagation(); setLightboxPhoto(null); }}
+          >
+            <HiX className="text-2xl" />
+          </button>
+          
+          <div className="relative w-full h-full flex flex-col items-center justify-center">
+            <img 
+              src={lightboxPhoto.original_url} 
+              alt="Full size" 
+              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            
+            <div className="mt-6" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => downloadImage(lightboxPhoto.original_url, `photo.jpg`)}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl font-semibold shadow-lg shadow-indigo-500/25 transition-all"
+              >
+                <HiDownload className="text-lg" /> {t('results.download')} รูปนี้
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
