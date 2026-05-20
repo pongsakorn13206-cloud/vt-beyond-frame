@@ -72,97 +72,94 @@ function UploadContent() {
     const uploadErrors = [];
 
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const ext = file.name.split('.').pop();
-        const storagePath = `${selectedEvent}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${ext}`;
+      // Upload 3 photos concurrently for speed (direct to Supabase, no Netlify limit)
+      const concurrency = 3;
+      for (let i = 0; i < files.length; i += concurrency) {
+        const batch = files.slice(i, i + concurrency);
 
-        setProgress({
-          current: i,
-          total: files.length,
-          phase: `${t('upload.uploading')} (${i + 1}/${files.length})`,
-        });
+        const results_batch = await Promise.allSettled(
+          batch.map(async (file, batchIdx) => {
+            const ext = file.name.split('.').pop();
+            const storagePath = `${selectedEvent}/${Date.now()}-${batchIdx}-${Math.random().toString(36).substr(2, 9)}.${ext}`;
 
-        try {
-          // Step 1: Upload directly to Supabase Storage from browser (bypasses Netlify 6MB limit)
-          const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('event-photos')
-            .upload(storagePath, file, {
-              contentType: file.type,
-              upsert: false,
+            // Step 1: Upload directly to Supabase Storage from browser
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('event-photos')
+              .upload(storagePath, file, {
+                contentType: file.type,
+                upsert: false,
+              });
+
+            if (uploadError) throw new Error(`Storage: ${uploadError.message}`);
+
+            // Step 2: Get public URL
+            const { data: urlData } = supabase.storage
+              .from('event-photos')
+              .getPublicUrl(storagePath);
+
+            // Step 3: Save metadata via lightweight API
+            const regRes = await fetch('/api/photos/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event_id: selectedEvent,
+                storage_path: storagePath,
+                original_url: urlData.publicUrl,
+                photographer_name: photographerName.trim(),
+              }),
             });
 
-          if (uploadError) {
-            console.error(`Storage upload error for ${file.name}:`, uploadError);
-            uploadErrors.push(`${file.name}: ${uploadError.message}`);
-            continue;
+            const regData = await regRes.json();
+            if (!regRes.ok) throw new Error(`Register: ${regData.error}`);
+
+            return regData.photo;
+          })
+        );
+
+        // Process results
+        const uploadedPhotos = [];
+        for (let j = 0; j < results_batch.length; j++) {
+          const result = results_batch[j];
+          if (result.status === 'fulfilled' && result.value) {
+            uploadedCount++;
+            uploadedPhotos.push(result.value);
+          } else if (result.status === 'rejected') {
+            const fileName = batch[j]?.name || `รูปที่ ${i + j + 1}`;
+            console.error(`Upload error for ${fileName}:`, result.reason);
+            uploadErrors.push(`${fileName}: ${result.reason.message}`);
           }
+        }
 
-          // Step 2: Get public URL
-          const { data: urlData } = supabase.storage
-            .from('event-photos')
-            .getPublicUrl(storagePath);
+        setProgress({
+          current: Math.min(i + concurrency, files.length),
+          total: files.length,
+          phase: `${t('upload.uploading')} (${Math.min(i + concurrency, files.length)}/${files.length})`,
+        });
 
-          const publicUrl = urlData.publicUrl;
+        // Step 4: Scan faces for successfully uploaded photos
+        for (const photo of uploadedPhotos) {
+          setProgress(p => ({
+            ...p,
+            phase: `สแกนใบหน้า ${scannedCount + 1}/${uploadedCount}`,
+          }));
 
-          // Step 3: Save metadata via lightweight API (only JSON, no file — tiny request)
-          const regRes = await fetch('/api/photos/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event_id: selectedEvent,
-              storage_path: storagePath,
-              original_url: publicUrl,
-              photographer_name: photographerName.trim(),
-            }),
-          });
-
-          const regData = await regRes.json();
-
-          if (!regRes.ok) {
-            console.error(`Register error for ${file.name}:`, regData.error);
-            uploadErrors.push(`${file.name}: ${regData.error}`);
-            continue;
+          try {
+            const scanRes = await fetch('/api/faces/scan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                photo_id: photo.id,
+                event_id: selectedEvent,
+                photo_url: photo.original_url,
+              }),
+            });
+            const scanData = await scanRes.json();
+            facesCount += scanData.saved || 0;
+            scannedCount++;
+          } catch (err) {
+            console.error('Scan error:', err);
+            scannedCount++;
           }
-
-          uploadedCount++;
-
-          setProgress({
-            current: i + 1,
-            total: files.length,
-            phase: `${t('upload.uploading')} (${i + 1}/${files.length})`,
-          });
-
-          // Step 4: Scan faces (optional — won't block upload if it fails)
-          if (regData.photo) {
-            const photo = regData.photo;
-            setProgress(p => ({
-              ...p,
-              phase: `สแกนใบหน้า ${scannedCount + 1}/${uploadedCount}`,
-            }));
-
-            try {
-              const scanRes = await fetch('/api/faces/scan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  photo_id: photo.id,
-                  event_id: selectedEvent,
-                  photo_url: photo.original_url,
-                }),
-              });
-              const scanData = await scanRes.json();
-              facesCount += scanData.saved || 0;
-              scannedCount++;
-            } catch (err) {
-              console.error('Scan error:', err);
-              scannedCount++;
-            }
-          }
-        } catch (err) {
-          console.error(`Error processing ${file.name}:`, err);
-          uploadErrors.push(`${file.name}: ${err.message}`);
-          continue;
         }
       }
     } catch (error) {
