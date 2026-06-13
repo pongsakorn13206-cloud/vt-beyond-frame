@@ -56,7 +56,19 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col bg-slate-950 text-white font-[family-name:var(--font-inter)]">
         <LanguageProvider>
           <Navbar />
-          <main className="flex-1 pt-16">
+
+          {/* 🚧 Maintenance Banner */}
+          <div className="fixed top-16 left-0 right-0 z-40 bg-gradient-to-r from-amber-500/90 to-orange-500/90 backdrop-blur-sm border-b border-amber-400/30 shadow-lg shadow-amber-500/20">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-center gap-3">
+              <span className="text-xl">⚠️</span>
+              <p className="text-sm sm:text-base font-semibold text-white text-center">
+                ระบบขัดข้อง กำลังดำเนินการแก้ไข อาจใช้เวลา 3-5 วัน ขออภัยในความไม่สะดวกครับ
+              </p>
+              <span className="text-xl">🔧</span>
+            </div>
+          </div>
+
+          <main className="flex-1 pt-28">
             {children}
           </main>
 
