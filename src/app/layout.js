@@ -62,8 +62,7 @@ export default function RootLayout({ children }) {
               </div>
               <h1 className="text-2xl font-bold text-white mb-4">ระบบขัดข้อง</h1>
               <p className="text-slate-400 mb-6 leading-relaxed">
-                กำลังดำเนินการแก้ไข ขออภัยในความไม่สะดวกครับ 🔧<br/>
-                (อาจใช้เวลา 3-5 วัน)
+                กำลังดำเนินการแก้ไข ขออภัยในความไม่สะดวกครับ 🔧
               </p>
               <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                 <div className="w-1/3 h-full bg-amber-500 rounded-full animate-[pulse_2s_ease-in-out_infinite]" />
